@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz Cat</title>
+<link rel="icon" type="image/png" href="icon.png">
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #131f24; --card: #1f2f38; --border: #2b3d47;
+  --green: #58cc02; --green-dark: #46a302; --red: #ff4b4b;
+  --orange: #ff9600; --text: #f1f7fb; --muted: #8fa6b2;
+  --gold: #ffd700; --gold-dark: #d4af00;
+}
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; display: flex; justify-content: center;
+  padding: 16px; overflow-x: hidden;
+  transition: background 0.5s ease;
+}
+.app { width: 100%; max-width: 480px; position: relative; }
+
+/* ===== GATTO ===== */
+.cat-stage {
+  position: fixed; right: 16px; bottom: 16px;
+  width: 150px; height: 150px; z-index: 100;
+  pointer-events: none;
+  transition: transform .4s cubic-bezier(.34,1.56,.64,1);
+  animation: catIdle 3s ease-in-out infinite;
+}
+.cat-img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+}
+
+/* Animazioni Gatto */
+.cat-happy { animation: catJump .6s ease !important; }
+.cat-sad { animation: catSad .6s ease !important; }
+.cat-celebrate { animation: catCelebrate .8s ease infinite !important; }
+
+@keyframes catJump { 0%,100%{transform:translateY(0) scale(1);} 30%{transform:translateY(-30px) scale(1.05);} 60%{transform:translateY(-10px) scale(.97);} }
+@keyframes catSad { 0%,100%{transform:translateY(0) rotate(0);} 30%{transform:translateY(5px) rotate(-5deg);} 60%{transform:translateY(2px) rotate(5deg);} }
+@keyframes catIdle { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
+@keyframes catCelebrate { 0%,100%{transform:translateY(0) rotate(0);} 25%{transform:translateY(-20px) rotate(-10deg);} 75%{transform:translateY(-20px) rotate(10deg);} }
+
+/* Fumetto */
+.cat-bubble {
+  position: fixed; right: 140px; bottom: 120px;
+  max-width: 180px; background: #fff; color: #131f24;
+  padding: 12px 16px; border-radius: 16px; font-size: 14px;
+  font-weight: 700; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  opacity: 0; transform: translateY(10px) scale(.9);
+  transition: all .3s cubic-bezier(.34,1.56,.64,1);
+  z-index: 101; pointer-events: none; line-height: 1.3;
+}
+.cat-bubble::after {
+  content: ""; position: absolute; bottom: -8px; right: 24px;
+  width: 0; height: 0; border-left: 8px solid transparent;
+  border-right: 8px solid transparent; border-top: 8px solid #fff;
+}
+.cat-bubble.show { opacity: 1; transform: translateY(0) scale(1); }
+
+/* Decorazioni Sfondo */
+.deco { position: fixed; z-index: 50; pointer-events: none; font-size: 40px; opacity: .85; }
+.deco-top-left { top: 8px; left: 8px; }
+.deco-top-right { top: 8px; right: 8px; }
+.deco-bottom-left { bottom: 8px; left: 8px; }
+
+/* ===== INTERFACCIA ===== */
+header { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; font-weight: 700; gap: 8px; }
+.streak { color: var(--orange); transition: transform .3s cubic-bezier(.34,1.56,.64,1); }
+.streak.bump { transform: scale(1.25); }
+.stats { font-size: 14px; color: var(--muted); font-weight: 400; }
+.coins { color: var(--gold); font-weight: 700; font-size: 14px; }
+.progress { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.progress-bar { height: 100%; background: var(--green); width: 0%; transition: width .4s cubic-bezier(.22,1,.36,1); }
+.card {
+  background: var(--card); border-radius: 16px; padding: 24px;
+  margin-top: 16px; box-shadow: 0 4px 20px rgba(0,0,0,.3);
+  animation: slideUp .35s cubic-bezier(.22,1,.36,1);
+}
+@keyframes slideUp { from { opacity:0; transform:translateY(16px);} to { opacity:1; transform:translateY(0);} }
+@keyframes popIn { from { opacity:0; transform:scale(.92);} to { opacity:1; transform:scale(1);} }
+.category { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--green); font-weight:700; margin-bottom:12px; }
+.question { font-size:20px; line-height:1.4; margin-bottom:24px; animation:popIn .3s cubic-bezier(.22,1,.36,1); }
+.answers { display:flex; flex-direction:column; gap:12px; }
+.answer {
+  background: var(--bg); border: 2px solid var(--border); border-radius: 12px;
+  padding: 16px; font-size: 16px; color: var(--text); cursor: pointer;
+  text-align: left; font-family: inherit;
+  transition: border-color .15s, transform .15s, background .15s;
+  animation: slideUp .35s cubic-bezier(.22,1,.36,1) backwards;
+}
+.answer:hover:not(:disabled) { border-color: var(--green); transform: translateX(4px); }
+.answer:disabled { cursor: default; }
+.answer.correct { border-color: var(--green); background: #1e3a1e; animation: pulseCorrect .4s ease; }
+.answer.wrong { border-color: var(--red); background: #3a1e1e; animation: shake .4s ease; }
+@keyframes pulseCorrect { 0%{transform:scale(1);} 40%{transform:scale(1.04);} 100%{transform:scale(1);} }
+@keyframes shake { 0%,100%{transform:translateX(0);} 20%{transform:translateX(-6px);} 40%{transform:translateX(6px);} 60%{transform:translateX(-4px);} 80%{transform:translateX(4px);} }
+.feedback { margin-top:16px; padding:12px; border-radius:12px; font-size:14px; line-height:1.5; display:none; }
+.feedback.show { display:block; animation: slideUp .3s cubic-bezier(.22,1,.36,1); }
+.feedback.ok { background:#1e3a1e; color:#a5e88c; }
+.feedback.no { background:#3a1e1e; color:#ffb3b3; }
+.btn {
+  margin-top:16px; width:100%; padding:16px; background:var(--green); color:var(--bg);
+  border:none; border-radius:12px; font-size:16px; font-weight:700; cursor:pointer;
+  font-family:inherit; transition: background .15s, transform .1s, box-shadow .15s;
+  box-shadow: 0 4px 0 var(--green-dark);
+}
+.btn:hover { background: var(--green-dark); }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--green-dark); }
+.btn.secondary { background: transparent; color: var(--muted); border: 2px solid var(--border); box-shadow: none; }
+.btn.secondary:hover { background: var(--card); color: var(--text); }
+.btn.gold { background: var(--gold); color: #131f24; box-shadow: 0 4px 0 var(--gold-dark); }
+.btn.gold:hover { background: var(--gold-dark); }
+.btn.hidden { display: none; }
+.menu-title { font-size:22px; font-weight:800; margin-top:24px; animation: slideUp .4s cubic-bezier(.22,1,.36,1); }
+.menu-sub { color:var(--muted); font-size:14px; margin-top:4px; margin-bottom:8px; animation: slideUp .45s cubic-bezier(.22,1,.36,1); }
+.lesson-info { display:flex; justify-content:space-between; font-size:14px; color:var(--muted); margin-bottom:16px; }
+.lesson-info b { color: var(--green); }
+.cat-row { display:flex; justify-content:space-between; padding:10px 0; font-size:14px; color:var(--muted); border-bottom:1px solid var(--border); }
+.cat-row:last-child { border-bottom:none; }
+.cat-row span:last-child { color: var(--text); font-weight:600; }
+.limit-box { background: var(--card); border-radius:16px; padding:20px; margin-top:16px; text-align:center; border:2px solid var(--border); }
+.limit-box h3 { font-size:18px; margin-bottom:8px; }
+.limit-box p { color: var(--muted); font-size:14px; line-height:1.5; }
+.done { text-align:center; padding:40px 24px; }
+.done h2 { font-size:24px; margin-bottom:12px; }
+.done p { color: var(--muted); margin-bottom:24px; line-height:1.5; }
+.confetti { position: fixed; top: -10px; width: 8px; height: 14px; pointer-events: none; z-index: 9999; animation: fall linear forwards; }
+@keyframes fall { to { transform: translateY(105vh) rotate(720deg); opacity: 0; } }
+
+/* Shop */
+.shop-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.shop-item:last-child { border-bottom: none; }
+.shop-item-info { display: flex; align-items: center; gap: 12px; flex: 1; }
+.shop-item-emoji { font-size: 28px; }
+.shop-item-name { font-size: 15px; font-weight: 600; }
+.shop-item-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.shop-buy {
+  background: var(--gold); color: #131f24; border: none; border-radius: 10px;
+  padding: 8px 14px; font-weight: 700; font-size: 14px; cursor: pointer;
+  font-family: inherit; transition: all .15s; box-shadow: 0 3px 0 var(--gold-dark);
+}
+.shop-buy:hover:not(:disabled) { background: var(--gold-dark); }
+.shop-buy:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--gold-dark); }
+.shop-buy:disabled { background: var(--border); color: var(--muted); box-shadow: none; cursor: not-allowed; }
+.shop-buy.owned { background: var(--green); color: var(--bg); box-shadow: 0 3px 0 var(--green-dark); }
+.shop-buy.equipped { background: var(--green-dark); color: var(--text); box-shadow: none; cursor: default; }
+.shop-section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--gold); font-weight: 700; margin: 16px 0 8px; }
+.shop-section-title:first-child { margin-top: 0; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.01ms !important; transition-duration:.01ms !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div style="flex:1">
+      <div class="streak" id="streak">🔥 0 giorni</div>
+      <div class="stats" id="stats">0 risposte corrette</div>
+    </div>
+    <div style="text-align:right">
+      <div class="coins" id="coins">🪙 0</div>
+      <div class="stats" id="counter"></div>
+    </div>
+  </header>
+  <div class="progress"><div class="progress-bar" id="bar"></div></div>
+  <main id="view"></main>
+</div>
+
+<!-- DECORAZIONI SFONDO -->
+<div class="deco deco-top-left" id="decoTL" style="display:none"></div>
+<div class="deco deco-top-right" id="decoTR" style="display:none"></div>
+<div class="deco deco-bottom-left" id="decoBL" style="display:none"></div>
+
+<!-- GATTO PULITO -->
+<div class="cat-stage cat-idle" id="catStage">
+  <img src="cat.png" alt="Gatto Mascotte" class="cat-img" id="catImg">
+</div>
+
+<div class="cat-bubble" id="catBubble"></div>
+
+<script>
+const QUESTIONS = [
+  // SPORT (60)
+  { cat:"Sport", q:"Quanti giocatori scendono in campo in una squadra di calcio?", a:["11","10","12","9"], correct:0, why:"Una squadra di calcio schiera 11 giocatori, portiere compreso." },
+  { cat:"Sport", q:"In quale sport si usa il termine 'ace'?", a:["Tennis","Calcio","Basket","Nuoto"], correct:0, why:"L'ace è un servizio vincente tipico del tennis." },
+  { cat:"Sport", q:"Quanti punti vale un canestro da tre punti nel basket?", a:["3","2","1","4"], correct:0, why:"Il canestro oltre la linea dei 3 punti vale 3 punti." },
+  { cat:"Sport", q:"Ogni quanti anni si tengono le Olimpiadi estive?", a:["4","2","3","5"], correct:0, why:"Le Olimpiadi estive si tengono ogni 4 anni." },
+  { cat:"Sport", q:"Chi ha vinto più Mondiali di calcio?", a:["Brasile","Italia","Germania","Argentina"], correct:0, why:"Il Brasile ha vinto 5 Mondiali: il record." },
+  { cat:"Sport", q:"Quante buche ha un campo da golf standard?", a:["18","9","12","21"], correct:0, why:"Un campo da golf standard ha 18 buche." },
+  { cat:"Sport", q:"In quale sport si usa la 'schiacciata'?", a:["Pallavolo","Tennis","Rugby","Hockey"], correct:0, why:"La schiacciata è un colpo tipico della pallavolo." },
+  { cat:"Sport", q:"Quanto dura un tempo regolamentare nel calcio?", a:["45 minuti","30 minuti","60 minuti","40 minuti"], correct:0, why:"Un tempo nel calcio dura 45 minuti." },
+  { cat:"Sport", q:"In che sport si usa il guantone da baseball?", a:["Baseball","Cricket","Rugby","Hockey"], correct:0, why:"Il guantone è l'attrezzo difensivo del baseball." },
+  { cat:"Sport", q:"Quale nazione ha vinto più Olimpiadi estive?", a:["Stati Uniti","Cina","Russia","Gran Bretagna"], correct:0, why:"Gli Stati Uniti hanno il maggior numero di ori olimpici estivi." },
+  { cat:"Sport", q:"Quanti set servono per vincere una partita di tennis maschile in uno Slam?", a:["3 su 5","2 su 3","4 su 7","1 su 1"], correct:0, why:"Nei Grande Slam maschili si gioca al meglio dei 5 set." },
+  { cat:"Sport", q:"Qual è la distanza di una maratona?", a:["42,195 km","40 km","50 km","38 km"], correct:0, why:"La maratona misura 42,195 km." },
+  { cat:"Sport", q:"In che sport si colpisce una pallina su un campo con buche?", a:["Golf","Cricket","Baseball","Croquet"], correct:0, why:"È il golf." },
+  { cat:"Sport", q:"Quanti giocatori ci sono in una squadra di pallavolo in campo?", a:["6","5","7","8"], correct:0, why:"In campo ci sono 6 giocatori per squadra." },
+  { cat:"Sport", q:"Quale squadra ha vinto più Champions League?", a:["Real Madrid","Milan","Bayern Monaco","Liverpool"], correct:0, why:"Il Real Madrid detiene il record di vittorie." },
+  { cat:"Sport", q:"In che sport si usa il termine 'strike'?", a:["Bowling","Tennis","Golf","Nuoto"], correct:0, why:"Lo strike è abbattere tutti i birilli al primo tiro." },
+  { cat:"Sport", q:"Quale paese ha inventato il judo?", a:["Giappone","Cina","Corea","Thailandia"], correct:0, why:"Il judo è nato in Giappone." },
+  { cat:"Sport", q:"Quanti punti vale una meta nel rugby?", a:["5","3","7","4"], correct:0, why:"Una meta vale 5 punti." },
+  { cat:"Sport", q:"Chi è il miglior maratoneta italiano di sempre?", a:["Gelindo Bordin","Stefano Baldini","Ivano Brugnetti","Alex Schwazer"], correct:0, why:"Bordin vinse l'oro olimpico a Seul 1988." },
+  { cat:"Sport", q:"In che sport si usa la stecca?", a:["Biliardo","Tennis","Golf","Hockey"], correct:0, why:"La stecca si usa nel biliardo." },
+  { cat:"Sport", q:"Qual è la durata di una partita di basket NBA?", a:["48 minuti","40 minuti","60 minuti","36 minuti"], correct:0, why:"4 quarti da 12 minuti = 48 minuti." },
+  { cat:"Sport", q:"In che sport si usa il termine 'birdie'?", a:["Golf","Tennis","Bowling","Rugby"], correct:0, why:"Il birdie è una buca chiusa sotto il par." },
+  { cat:"Sport", q:"Quante medaglie d'oro ha vinto Michael Phelps?", a:["23","18","28","15"], correct:0, why:"Phelps ha vinto 23 ori olimpici." },
+  { cat:"Sport", q:"Quale sport pratica Novak Djokovic?", a:["Tennis","Golf","Basket","Nuoto"], correct:0, why:"Djokovic è un tennista serbo." },
+  { cat:"Sport", q:"In che sport si usa il termine 'hat-trick'?", a:["Calcio","Tennis","Golf","Nuoto"], correct:0, why:"Hat-trick indica tre gol dello stesso giocatore." },
+  { cat:"Sport", q:"Quanti giocatori ci sono in una squadra di rugby in campo?", a:["15","11","13","18"], correct:0, why:"Nel rugby union si gioca in 15." },
+  { cat:"Sport", q:"Qual è lo sport praticato da Valentino Rossi?", a:["Motociclismo","Ciclismo","Automobilismo","Sci"], correct:0, why:"Valentino Rossi è un pilota motociclistico." },
+  { cat:"Sport", q:"In che sport si usa il termine 'spareggio'?", a:["Calcio","Nuoto","Atletica","Golf"], correct:0, why:"Lo spareggio è tipico del calcio." },
+  { cat:"Sport", q:"Quale nazione ha inventato il cricket?", a:["Inghilterra","India","Australia","Sudafrica"], correct:0, why:"Il cricket è nato in Inghilterra." },
+  { cat:"Sport", q:"In che sport si usa il termine 'cesto'?", a:["Basket","Pallavolo","Rugby","Tennis"], correct:0, why:"Il cesto è il canestro del basket." },
+  { cat:"Sport", q:"Quanti anelli ha il simbolo olimpico?", a:["5","4","6","3"], correct:0, why:"I cinque anelli rappresentano i continenti." },
+  { cat:"Sport", q:"Qual è la distanza dei 100 metri piani?", a:["100 metri","90 metri","110 metri","80 metri"], correct:0, why:"I 100 metri piani sono una gara iconica dell'atletica." },
+  { cat:"Sport", q:"In che sport si usa il termine 'fuorigioco'?", a:["Calcio","Tennis","Nuoto","Golf"], correct:0, why:"Il fuorigioco è una regola del calcio." },
+  { cat:"Sport", q:"Quale sport si pratica a Wimbledon?", a:["Tennis","Golf","Cricket","Rugby"], correct:0, why:"Wimbledon è il torneo di tennis sull'erba più antico." },
+  { cat:"Sport", q:"Quanti quarti ha una partita di basket NBA?", a:["4","2","3","5"], correct:0, why:"La partita è divisa in 4 quarti." },
+  { cat:"Sport", q:"Chi è il giocatore con più Palloni d'Oro vinti?", a:["Lionel Messi","Cristiano Ronaldo","Michel Platini","Johan Cruijff"], correct:0, why:"Messi ha vinto 8 Palloni d'Oro." },
+  { cat:"Sport", q:"In che sport si gioca su un campo con la rete?", a:["Tennis","Golf","Baseball","Cricket"], correct:0, why:"È il tennis." },
+  { cat:"Sport", q:"Quanti punti vale un tuffo olimpico?", a:["Dipende dai giudici","Sempre 10","5 fissi","3 fissi"], correct:0, why:"Il punteggio è la somma dei voti dei giudici." },
+  { cat:"Sport", q:"In che sport si usa il termine 'set point'?", a:["Tennis","Calcio","Basket","Nuoto"], correct:0, why:"Il set point chiude il set nel tennis." },
+  { cat:"Sport", q:"Quale nazione ha vinto il primo Mondiale di calcio nel 1930?", a:["Uruguay","Brasile","Italia","Argentina"], correct:0, why:"L'Uruguay vinse il Mondiale del 1930." },
+  { cat:"Sport", q:"Quanti minuti dura un tempo supplementare nel calcio?", a:["15","10","20","30"], correct:0, why:"Ogni tempo supplementare dura 15 minuti." },
+  { cat:"Sport", q:"In che sport si usa il termine 'home run'?", a:["Baseball","Cricket","Tennis","Golf"], correct:0, why:"L'home run è un colpo del baseball." },
+  { cat:"Sport", q:"Qual è la lunghezza di una piscina olimpica?", a:["50 metri","25 metri","100 metri","75 metri"], correct:0, why:"Le gare olimpiche si svolgono in piscine da 50 metri." },
+  { cat:"Sport", q:"Quale paese ha inventato il taekwondo?", a:["Corea","Giappone","Cina","Vietnam"], correct:0, why:"Il taekwondo è un'arte marziale coreana." },
+  { cat:"Sport", q:"Quanti giocatori titolari ha una squadra di basket in campo?", a:["5","4","6","7"], correct:0, why:"Nel basket giocano 5 per squadra." },
+  { cat:"Sport", q:"In che sport si usa il termine 'rouge'?", a:["Rugby","Calcio","Tennis","Golf"], correct:0, why:"Il 'rouge' è un termine del rugby." },
+  { cat:"Sport", q:"Chi è il tennista con più titoli del Grande Slam maschili?", a:["Novak Djokovic","Rafael Nadal","Roger Federer","Pete Sampras"], correct:0, why:"Djokovic detiene il record con 24 titoli." },
+  { cat:"Sport", q:"Quanti metri è alta una porta da calcio?", a:["2,44 m","2,00 m","2,20 m","2,60 m"], correct:0, why:"La porta da calcio è alta 2,44 metri." },
+  { cat:"Sport", q:"In che sport si usano 'birdie' e 'bogey'?", a:["Golf","Tennis","Bowling","Cricket"], correct:0, why:"Sono termini del golf." },
+  { cat:"Sport", q:"Quale nazione ha inventato il sumo?", a:["Giappone","Cina","Corea","Mongolia"], correct:0, why:"Il sumo è uno sport tradizionale giapponese." },
+  { cat:"Sport", q:"Quanti round dura un incontro di boxe professionistica?", a:["12","10","15","8"], correct:0, why:"I match professionistici durano fino a 12 round." },
+  { cat:"Sport", q:"In che sport si usa il termine 'drive'?", a:["Golf","Tennis","Calcio","Nuoto"], correct:0, why:"Il drive è un colpo del golf." },
+  { cat:"Sport", q:"Qual è il record del mondo dei 100 metri piani maschili?", a:["9,58 s","9,72 s","9,80 s","9,63 s"], correct:0, why:"Usain Bolt corse in 9,58 secondi nel 2009." },
+  { cat:"Sport", q:"Quante pause tecniche ci sono in una partita di pallavolo per set?", a:["2 per squadra","1 per squadra","3 per squadra","Nessuna"], correct:0, why:"Ogni squadra ha 2 timeout tecnici per set." },
+  { cat:"Sport", q:"In che sport si usa la 'buca in uno'?", a:["Golf","Tennis","Bowling","Cricket"], correct:0, why:"La buca in uno è un colpo del golf." },
+  { cat:"Sport", q:"Quale nazione ha vinto l'Europeo di calcio 2020?", a:["Italia","Inghilterra","Spagna","Francia"], correct:0, why:"L'Italia vinse battendo l'Inghilterra ai rigori." },
+  { cat:"Sport", q:"Quanti giocatori compongono una squadra di calcio a 5?", a:["5","6","4","7"], correct:0, why:"Il calcio a 5 si gioca in 5, portiere compreso." },
+  { cat:"Sport", q:"In che sport si usa lo 'spareggio ai rigori'?", a:["Calcio","Tennis","Nuoto","Golf"], correct:0, why:"I rigori sono una modalità di spareggio nel calcio." },
+  { cat:"Sport", q:"Qual è la durata di un round di boxe?", a:["3 minuti","2 minuti","5 minuti","4 minuti"], correct:0, why:"Un round di boxe dura 3 minuti." },
+  { cat:"Sport", q:"In che sport si usa il termine 'cronometro'?", a:["Ciclismo","Tennis","Golf","Nuoto"], correct:0, why:"La cronometro è una gara del ciclismo." },
+  { cat:"Sport", q:"Quanti giocatori ci sono in una squadra di hockey su ghiaccio?", a:["6","5","7","8"], correct:0, why:"Nell'hockey su ghiaccio giocano 6, portiere compreso." },
+
+  // GEOGRAFIA (60)
+  { cat:"Geografia", q:"Qual è la capitale dell'Australia?", a:["Canberra","Sydney","Melbourne","Perth"], correct:0, why:"Sydney è la più grande, ma la capitale è Canberra." },
+  { cat:"Geografia", q:"Qual è il fiume più lungo del mondo?", a:["Nilo","Amazzoni","Yangtze","Mississippi"], correct:0, why:"Il Nilo è generalmente considerato il più lungo." },
+  { cat:"Geografia", q:"Quanti continenti ci sono?", a:["7","5","6","8"], correct:0, why:"Il modello più diffuso conta 7 continenti." },
+  { cat:"Geografia", q:"Qual è la montagna più alta d'Europa?", a:["Elbrus","Monte Bianco","Matterhorn","Monte Rosa"], correct:0, why:"L'Elbrus (5.642 m) è in Russia." },
+  { cat:"Geografia", q:"In quale paese si trova Machu Picchu?", a:["Perù","Messico","Bolivia","Cile"], correct:0, why:"Machu Picchu è in Perù, vicino a Cusco." },
+  { cat:"Geografia", q:"Qual è la capitale della Francia?", a:["Parigi","Lione","Marsiglia","Nizza"], correct:0, why:"Parigi è la capitale della Francia." },
+  { cat:"Geografia", q:"Qual è l'oceano più grande del mondo?", a:["Pacifico","Atlantico","Indiano","Artico"], correct:0, why:"L'Oceano Pacifico è il più grande e profondo." },
+  { cat:"Geografia", q:"Qual è il deserto più caldo del mondo?", a:["Sahara","Gobi","Atacama","Kalahari"], correct:0, why:"Il Sahara è il deserto caldo più grande." },
+  { cat:"Geografia", q:"Qual è la capitale del Giappone?", a:["Tokyo","Osaka","Kyoto","Nagoya"], correct:0, why:"Tokyo è la capitale dal 1868." },
+  { cat:"Geografia", q:"Quale paese ha la popolazione più numerosa al mondo?", a:["India","Cina","Stati Uniti","Indonesia"], correct:0, why:"Dal 2023 l'India ha superato la Cina." },
+  { cat:"Geografia", q:"Qual è il lago più grande del mondo?", a:["Mar Caspio","Lago Superiore","Lago Vittoria","Lago Baikal"], correct:0, why:"Il Mar Caspio è il lago più grande." },
+  { cat:"Geografia", q:"Qual è la catena montuosa più lunga del mondo?", a:["Ande","Himalaya","Alpi","Montagne Rocciose"], correct:0, why:"Le Ande sono la catena più lunga." },
+  { cat:"Geografia", q:"In quale continente si trova il deserto del Gobi?", a:["Asia","Africa","Australia","America"], correct:0, why:"Il Gobi è in Asia." },
+  { cat:"Geografia", q:"Qual è la capitale del Canada?", a:["Ottawa","Toronto","Montreal","Vancouver"], correct:0, why:"Ottawa è la capitale; Toronto la più popolosa." },
+  { cat:"Geografia", q:"Quale mare bagna l'Italia a est?", a:["Adriatico","Tirreno","Ionio","Ligure"], correct:0, why:"L'Adriatico bagna la costa est." },
+  { cat:"Geografia", q:"Qual è il paese più piccolo del mondo?", a:["Città del Vaticano","Monaco","San Marino","Nauru"], correct:0, why:"La Città del Vaticano è il più piccolo stato." },
+  { cat:"Geografia", q:"Qual è la capitale della Spagna?", a:["Madrid","Barcellona","Siviglia","Valencia"], correct:0, why:"Madrid è la capitale." },
+  { cat:"Geografia", q:"Quale fiume attraversa Parigi?", a:["Senna","Loira","Rodano","Garonna"], correct:0, why:"La Senna attraversa Parigi." },
+  { cat:"Geografia", q:"Qual è l'isola più grande del mondo?", a:["Groenlandia","Nuova Guinea","Borneo","Madagascar"], correct:0, why:"La Groenlandia è l'isola più grande." },
+  { cat:"Geografia", q:"Qual è la capitale della Germania?", a:["Berlino","Monaco","Amburgo","Colonia"], correct:0, why:"Berlino è la capitale dal 1990." },
+  { cat:"Geografia", q:"In quale paese si trova la Torre Eiffel?", a:["Francia","Italia","Belgio","Svizzera"], correct:0, why:"La Torre Eiffel è a Parigi." },
+  { cat:"Geografia", q:"Qual è la capitale del Regno Unito?", a:["Londra","Manchester","Edimburgo","Dublino"], correct:0, why:"Londra è la capitale." },
+  { cat:"Geografia", q:"Qual è il vulcano più alto d'Europa?", a:["Etna","Vesuvio","Stromboli","Teide"], correct:0, why:"L'Etna è il vulcano attivo più alto d'Europa." },
+  { cat:"Geografia", q:"Quale stato degli USA è il più grande per superficie?", a:["Alaska","Texas","California","Montana"], correct:0, why:"L'Alaska è lo stato più grande." },
+  { cat:"Geografia", q:"Qual è la capitale del Brasile?", a:["Brasilia","Rio de Janeiro","San Paolo","Salvador"], correct:0, why:"Brasilia è la capitale dal 1960." },
+  { cat:"Geografia", q:"Qual è il mare più salato del mondo?", a:["Mar Morto","Mar Rosso","Mediterraneo","Adriatico"], correct:0, why:"Il Mar Morto ha salinità elevatissima." },
+  { cat:"Geografia", q:"Quale paese ha la forma di stivale?", a:["Italia","Grecia","Portogallo","Norvegia"], correct:0, why:"L'Italia è paragonata a uno stivale." },
+  { cat:"Geografia", q:"Qual è la capitale dell'Egitto?", a:["Il Cairo","Alessandria","Luxor","Giza"], correct:0, why:"Il Cairo è la capitale." },
+  { cat:"Geografia", q:"Qual è la cima più alta del mondo?", a:["Everest","K2","Kangchenjunga","Makalu"], correct:0, why:"L'Everest (8.848 m) è la più alta." },
+  { cat:"Geografia", q:"In quale oceano si trova il Madagascar?", a:["Indiano","Atlantico","Pacifico","Artico"], correct:0, why:"Il Madagascar è nell'Oceano Indiano." },
+  { cat:"Geografia", q:"Qual è la capitale della Russia?", a:["Mosca","San Pietroburgo","Kiev","Minsk"], correct:0, why:"Mosca è la capitale." },
+  { cat:"Geografia", q:"Quale paese è detto 'del sol levante'?", a:["Giappone","Cina","Corea del Sud","Vietnam"], correct:0, why:"Il Giappone è il paese del sol levante." },
+  { cat:"Geografia", q:"Qual è il fiume che attraversa Londra?", a:["Tamigi","Severn","Mersey","Clyde"], correct:0, why:"Il Tamigi attraversa Londra." },
+  { cat:"Geografia", q:"Qual è la capitale dell'Argentina?", a:["Buenos Aires","Cordoba","Rosario","Mendoza"], correct:0, why:"Buenos Aires è la capitale." },
+  { cat:"Geografia", q:"Quante regioni ha l'Italia?", a:["20","19","21","18"], correct:0, why:"L'Italia ha 20 regioni." },
+  { cat:"Geografia", q:"Qual è il paese più esteso del mondo?", a:["Russia","Canada","Cina","USA"], correct:0, why:"La Russia è il più esteso." },
+  { cat:"Geografia", q:"Qual è la capitale della Cina?", a:["Pechino","Shanghai","Hong Kong","Canton"], correct:0, why:"Pechino è la capitale." },
+  { cat:"Geografia", q:"Qual è il continente più piccolo?", a:["Oceania","Europa","Antartide","Sudamerica"], correct:0, why:"L'Oceania è il continente più piccolo." },
+  { cat:"Geografia", q:"Quale paese ha la foglia d'acero sulla bandiera?", a:["Canada","USA","Messico","Brasile"], correct:0, why:"La foglia d'acero è simbolo del Canada." },
+  { cat:"Geografia", q:"Qual è la capitale dell'India?", a:["Nuova Delhi","Mumbai","Calcutta","Bangalore"], correct:0, why:"Nuova Delhi è la capitale." },
+  { cat:"Geografia", q:"Qual è il fiume più lungo d'Italia?", a:["Po","Tevere","Arno","Adige"], correct:0, why:"Il Po è il fiume più lungo d'Italia (652 km)." },
+  { cat:"Geografia", q:"Qual è la capitale del Portogallo?", a:["Lisbona","Porto","Coimbra","Faro"], correct:0, why:"Lisbona è la capitale." },
+  { cat:"Geografia", q:"In quale paese si trova il Colosseo?", a:["Italia","Grecia","Spagna","Francia"], correct:0, why:"Il Colosseo è a Roma." },
+  { cat:"Geografia", q:"Qual è il golfo più grande del mondo?", a:["Golfo del Messico","Golfo Persico","Golfo di Biscaglia","Golfo di Guinea"], correct:0, why:"Il Golfo del Messico è il più grande." },
+  { cat:"Geografia", q:"Qual è la capitale della Grecia?", a:["Atene","Salonicco","Patrasso","Candia"], correct:0, why:"Atene è la capitale." },
+  { cat:"Geografia", q:"Quale paese ha più fusi orari?", a:["Francia","Russia","USA","Cina"], correct:0, why:"La Francia, con i territori d'oltremare, ne ha di più." },
+  { cat:"Geografia", q:"Qual è la capitale del Messico?", a:["Città del Messico","Guadalajara","Monterrey","Puebla"], correct:0, why:"Città del Messico è la capitale." },
+  { cat:"Geografia", q:"In quale continente si trova l'Egitto?", a:["Africa","Asia","Europa","Oceania"], correct:0, why:"L'Egitto è in Africa (Sinai in Asia)." },
+  { cat:"Geografia", q:"Qual è il monte più alto degli Stati Uniti?", a:["Denali","Monte Rainier","Monte Whitney","Elbert"], correct:0, why:"Il Denali è il più alto." },
+  { cat:"Geografia", q:"Qual è la capitale della Turchia?", a:["Ankara","Istanbul","Smirne","Bursa"], correct:0, why:"Ankara è la capitale, non Istanbul." },
+  { cat:"Geografia", q:"Qual è il paese con più isole al mondo?", a:["Svezia","Indonesia","Filippine","Norvegia"], correct:0, why:"La Svezia ha il maggior numero di isole." },
+  { cat:"Geografia", q:"Qual è la capitale dell'Irlanda?", a:["Dublino","Belfast","Cork","Galway"], correct:0, why:"Dublino è la capitale della Repubblica d'Irlanda." },
+  { cat:"Geografia", q:"In quale paese si trova il Kilimangiaro?", a:["Tanzania","Kenya","Uganda","Etiopia"], correct:0, why:"Il Kilimangiaro è in Tanzania." },
+  { cat:"Geografia", q:"Qual è la capitale della Svezia?", a:["Stoccolma","Göteborg","Malmö","Uppsala"], correct:0, why:"Stoccolma è la capitale." },
+  { cat:"Geografia", q:"Qual è il mare che bagna la costa ovest dell'Italia?", a:["Tirreno","Adriatico","Ionio","Egeo"], correct:0, why:"Il Tirreno bagna la costa ovest." },
+  { cat:"Geografia", q:"Qual è la capitale della Norvegia?", a:["Oslo","Bergen","Trondheim","Stavanger"], correct:0, why:"Oslo è la capitale." },
+  { cat:"Geografia", q:"Quale paese ha la bandiera rossa con stella gialla?", a:["Cina","Vietnam","Turchia","Marocco"], correct:0, why:"La Cina ha la bandiera rossa con stelle gialle." },
+  { cat:"Geografia", q:"Qual è la capitale dell'Austria?", a:["Vienna","Salisburgo","Graz","Linz"], correct:0, why:"Vienna è la capitale." },
+  { cat:"Geografia", q:"Qual è la capitale della Polonia?", a:["Varsavia","Cracovia","Danzica","Breslavia"], correct:0, why:"Varsavia è la capitale." },
+
+  // STORIA (60)
+  { cat:"Storia", q:"In quale anno è caduto il Muro di Berlino?", a:["1989","1991","1987","1990"], correct:0, why:"Il Muro è caduto il 9 novembre 1989." },
+  { cat:"Storia", q:"Chi era il primo imperatore romano?", a:["Augusto","Giulio Cesare","Nerone","Traiano"], correct:0, why:"Augusto è considerato il primo imperatore." },
+  { cat:"Storia", q:"In che anno è iniziata la Prima Guerra Mondiale?", a:["1914","1918","1912","1915"], correct:0, why:"La Prima Guerra Mondiale iniziò nel 1914." },
+  { cat:"Storia", q:"Chi ha scritto la Divina Commedia?", a:["Dante Alighieri","Petrarca","Boccaccio","Virgilio"], correct:0, why:"Dante l'ha scritta tra il 1304 e il 1321." },
+  { cat:"Storia", q:"In che anno è finita la Seconda Guerra Mondiale?", a:["1945","1944","1946","1943"], correct:0, why:"La Seconda Guerra Mondiale è finita nel 1945." },
+  { cat:"Storia", q:"Chi era presidente USA durante la crisi dei missili di Cuba?", a:["Kennedy","Eisenhower","Nixon","Johnson"], correct:0, why:"John F. Kennedy affrontò la crisi nel 1962." },
+  { cat:"Storia", q:"Quale civiltà ha costruito le piramidi di Giza?", a:["Egizia","Maya","Greca","Romana"], correct:0, why:"Le piramidi di Giza furono costruite dagli Egizi." },
+  { cat:"Storia", q:"In che anno è stata fondata Roma secondo la tradizione?", a:["753 a.C.","500 a.C.","1000 a.C.","476 d.C."], correct:0, why:"La tradizione fissa il 753 a.C." },
+  { cat:"Storia", q:"Chi era il dittatore dell'Italia fascista?", a:["Benito Mussolini","Adolf Hitler","Francisco Franco","António Salazar"], correct:0, why:"Mussolini guidò il regime fascista." },
+  { cat:"Storia", q:"In che anno è iniziata la Rivoluzione francese?", a:["1789","1776","1799","1804"], correct:0, why:"La Rivoluzione francese iniziò nel 1789." },
+  { cat:"Storia", q:"Chi guidò la prima circumnavigazione del globo?", a:["Ferdinando Magellano","Cristoforo Colombo","Vasco da Gama","James Cook"], correct:0, why:"Magellano la iniziò; fu completata da Elcano." },
+  { cat:"Storia", q:"In che anno Colombo arrivò in America?", a:["1492","1498","1487","1500"], correct:0, why:"Colombo arrivò nel 1492." },
+  { cat:"Storia", q:"Quale impero cadde nel 1453 con Costantinopoli?", a:["Bizantino","Romano d'Occidente","Ottomano","Persiano"], correct:0, why:"Cadde l'Impero Bizantino per mano ottomana." },
+  { cat:"Storia", q:"Chi era il faraone della Grande Piramide di Giza?", a:["Cheope","Tutankhamon","Ramses II","Cleopatra"], correct:0, why:"La Grande Piramide fu costruita per Cheope." },
+  { cat:"Storia", q:"In che anno l'Italia è diventata una Repubblica?", a:["1946","1945","1948","1950"], correct:0, why:"Il referendum si tenne il 2 giugno 1946." },
+  { cat:"Storia", q:"Chi ha scritto 'Il Principe'?", a:["Niccolò Machiavelli","Dante Alighieri","Francesco Guicciardini","Tommaso Campanella"], correct:0, why:"Machiavelli lo scrisse nel 1513." },
+  { cat:"Storia", q:"Chi era il leader dell'URSS durante la Seconda Guerra Mondiale?", a:["Stalin","Lenin","Chruščëv","Brežnev"], correct:0, why:"Stalin guidò l'URSS durante la guerra." },
+  { cat:"Storia", q:"Quale evento è considerato l'inizio della Prima Guerra Mondiale?", a:["Assassinio di Francesco Ferdinando","Invasione della Polonia","Trattato di Versailles","Rivoluzione russa"], correct:0, why:"L'assassinio dell'arciduca a Sarajevo fu la scintilla." },
+  { cat:"Storia", q:"Chi ha guidato l'indipendenza indiana?", a:["Mahatma Gandhi","Nehru","Jinnah","Bose"], correct:0, why:"Gandhi guidò la lotta nonviolenta." },
+  { cat:"Storia", q:"In che anno è stato firmato il Trattato di Versailles?", a:["1919","1918","1920","1921"], correct:0, why:"Il Trattato fu firmato nel 1919." },
+  { cat:"Storia", q:"Quale civiltà precolombiana costruì Machu Picchu?", a:["Inca","Maya","Azteca","Olmechi"], correct:0, why:"Machu Picchu è un sito inca." },
+  { cat:"Storia", q:"Chi era il primo presidente degli Stati Uniti?", a:["George Washington","Thomas Jefferson","John Adams","Benjamin Franklin"], correct:0, why:"Washington fu il primo presidente." },
+  { cat:"Storia", q:"In che anno è avvenuto lo sbarco in Normandia?", a:["1944","1943","1945","1942"], correct:0, why:"Il D-Day è il 6 giugno 1944." },
+  { cat:"Storia", q:"Quale dinastia ha regnato in Italia durante il Risorgimento?", a:["Savoia","Borbone","Asburgo","Estensi"], correct:0, why:"I Savoia guidarono l'unificazione." },
+  { cat:"Storia", q:"Chi era il condottiero cartaginese che attraversò le Alpi?", a:["Annibale","Scipione","Cesare","Alessandro"], correct:0, why:"Annibale attraversò le Alpi nel 218 a.C." },
+  { cat:"Storia", q:"In che anno è caduto l'Impero Romano d'Occidente?", a:["476 d.C.","410 d.C.","395 d.C.","500 d.C."], correct:0, why:"Cadde nel 476 d.C. con Odoacre." },
+  { cat:"Storia", q:"Chi ha scoperto la penicillina?", a:["Alexander Fleming","Louis Pasteur","Marie Curie","Robert Koch"], correct:0, why:"Fleming scoprì la penicillina nel 1928." },
+  { cat:"Storia", q:"Quale evento segnò l'inizio della Rivoluzione russa?", a:["Rivoluzione d'ottobre","Caduta del muro","Prima guerra mondiale","Trattato di Brest-Litovsk"], correct:0, why:"La Rivoluzione d'ottobre del 1917." },
+  { cat:"Storia", q:"Chi era il re d'Italia al momento dell'Unità?", a:["Vittorio Emanuele II","Umberto I","Vittorio Emanuele III","Carlo Alberto"], correct:0, why:"Vittorio Emanuele II fu il primo re d'Italia." },
+  { cat:"Storia", q:"Quale paese ha bombardato Pearl Harbor?", a:["Giappone","Germania","Italia","Cina"], correct:0, why:"Il Giappone attaccò Pearl Harbor nel 1941." },
+  { cat:"Storia", q:"Chi era la faraona più famosa d'Egitto?", a:["Hatshepsut","Nefertiti","Cleopatra","Nefertari"], correct:0, why:"Hatshepsut regnò come faraone nel XV secolo a.C." },
+  { cat:"Storia", q:"Quale muro divideva Berlino?", a:["Muro di Berlino","Muro di Adriano","Muro di Costantinopoli","Muro di Maginot"], correct:0, why:"Il Muro di Berlino divise la città dal 1961 al 1989." },
+  { cat:"Storia", q:"Chi ha scritto il 'Manifesto del Partito Comunista'?", a:["Marx ed Engels","Lenin","Stalin","Trotsky"], correct:0, why:"Marx ed Engels lo pubblicarono nel 1848." },
+  { cat:"Storia", q:"In che anno l'uomo è sbarcato sulla Luna?", a:["1969","1968","1970","1971"], correct:0, why:"Apollo 11 sbarcò il 20 luglio 1969." },
+  { cat:"Storia", q:"Quale città era la capitale dell'Impero Bizantino?", a:["Costantinopoli","Roma","Atene","Alessandria"], correct:0, why:"Costantinopoli (oggi Istanbul)." },
+  { cat:"Storia", q:"Chi era presidente USA durante la guerra del Vietnam?", a:["Johnson","Kennedy","Nixon","Ford"], correct:0, why:"Johnson escalò il conflitto; Nixon lo concluse." },
+  { cat:"Storia", q:"In che anno è iniziata la Guerra Fredda?", a:["1947","1945","1950","1955"], correct:0, why:"Convenzionalmente nel 1947 con la dottrina Truman." },
+  { cat:"Storia", q:"Quale civiltà ha inventato la scrittura cuneiforme?", a:["Sumeri","Egizi","Greci","Fenici"], correct:0, why:"I Sumeri inventarono la scrittura cuneiforme." },
+  { cat:"Storia", q:"Chi guidò le truppe italiane nella Prima Guerra Mondiale?", a:["Luigi Cadorna","Armando Diaz","Pietro Badoglio","Vittorio Emanuele III"], correct:0, why:"Cadorna prima, Diaz poi." },
+  { cat:"Storia", q:"In che anno è iniziata la Rivoluzione industriale?", a:["Metà del XVIII secolo","Inizio del XIX secolo","Fine del XVII secolo","Metà del XX secolo"], correct:0, why:"Iniziò intorno alla metà del Settecento." },
+  { cat:"Storia", q:"Chi era il primo presidente della Repubblica Italiana?", a:["Enrico De Nicola","Luigi Einaudi","Giovanni Gronchi","Sandro Pertini"], correct:0, why:"Enrico De Nicola fu il primo presidente." },
+  { cat:"Storia", q:"In che anno è stata proclamata l'Unità d'Italia?", a:["1861","1859","1870","1848"], correct:0, why:"Il Regno d'Italia fu proclamato il 17 marzo 1861." },
+  { cat:"Storia", q:"Quale imperatore divise l'impero romano in due parti?", a:["Diocleziano","Costantino","Teodosio","Traiano"], correct:0, why:"Teodosio divise definitivamente l'impero." },
+  { cat:"Storia", q:"Quale rivoluzione portò al potere i bolscevichi?", a:["Rivoluzione d'ottobre","Rivoluzione di febbraio","Rivoluzione francese","Rivoluzione industriale"], correct:0, why:"La Rivoluzione d'ottobre del 1917." },
+  { cat:"Storia", q:"Chi era il leader della Rivoluzione cubana?", a:["Fidel Castro","Che Guevara","Batista","Raúl Castro"], correct:0, why:"Fidel Castro guidò la rivoluzione nel 1959." },
+  { cat:"Storia", q:"In che anno è iniziata la Rivoluzione americana?", a:["1775","1776","1781","1783"], correct:0, why:"La guerra d'indipendenza iniziò nel 1775." },
+  { cat:"Storia", q:"Quale città fu distrutta dal Vesuvio nel 79 d.C.?", a:["Pompei","Ercolano","Napoli","Roma"], correct:0, why:"Pompei ed Ercolano furono distrutte dal Vesuvio." },
+  { cat:"Storia", q:"Chi ha scritto 'La Repubblica'?", a:["Platone","Aristotele","Socrate","Cicerone"], correct:0, why:"Platone scrisse 'La Repubblica'." },
+  { cat:"Storia", q:"In che anno è caduta l'URSS?", a:["1991","1989","1990","1992"], correct:0, why:"L'URSS si sciolse nel dicembre 1991." },
+  { cat:"Storia", q:"Quale battaglia del 1815 segnò la fine di Napoleone?", a:["Waterloo","Austerlitz","Trafalgar","Borodino"], correct:0, why:"La battaglia di Waterloo (1815)." },
+  { cat:"Storia", q:"Chi era il doge che guidò Venezia contro i turchi nel 1684?", a:["Francesco Morosini","Enrico Dandolo","Andrea Dandolo","Pietro Orseolo"], correct:0, why:"Francesco Morosini fu il doge della vittoria del 1684." },
+  { cat:"Storia", q:"In che anno è stato firmato l'armistizio che pose fine alla Prima Guerra Mondiale?", a:["1918","1917","1919","1920"], correct:0, why:"L'armistizio di Compiègne fu firmato l'11 novembre 1918." },
+  { cat:"Storia", q:"Quale civiltà costruì Stonehenge?", a:["Neolitica","Romana","Greca","Egizia"], correct:0, why:"Stonehenge fu costruita in epoca neolitica." },
+  { cat:"Storia", q:"Chi guidò la conquista romana della Gallia?", a:["Giulio Cesare","Pompeo","Crasso","Augusto"], correct:0, why:"Cesare conquistò la Gallia tra il 58 e il 50 a.C." },
+  { cat:"Storia", q:"In che anno è iniziata la Guerra dei Cent'anni?", a:["1337","1300","1400","1420"], correct:0, why:"La Guerra dei Cent'anni iniziò nel 1337." },
+  { cat:"Storia", q:"Quale papa indisse il Concilio Vaticano II?", a:["Giovanni XXIII","Pio XII","Paolo VI","Giovanni Paolo II"], correct:0, why:"Giovanni XXIII indisse il Concilio nel 1962." },
+  { cat:"Storia", q:"Chi raggiunse per primo il Polo Sud?", a:["Roald Amundsen","Robert Scott","Ernest Shackleton","Fridtjof Nansen"], correct:0, why:"Amundsen raggiunse il Polo Sud nel 1911." },
+  { cat:"Storia", q:"Quale impero fu sconfitto nella battaglia di Lepanto?", a:["Ottomano","Bizantino","Persiano","Mongolo"], correct:0, why:"La Lega Santa sconfisse l'Impero Ottomano (1571)." },
+  { cat:"Storia", q:"Chi era il leader dell'URSS durante la crisi di Cuba?", a:["Chruščëv","Stalin","Brežnev","Gorbačëv"], correct:0, why:"Chruščëv era al potere nel 1962." },
+  { cat:"Storia", q:"In che anno è stata inaugurata la prima ferrovia italiana?", a:["1839","1850","1861","1820"], correct:0, why:"La Napoli-Portici fu inaugurata nel 1839." },
+
+  // TRIVIA (60)
+  { cat:"Trivia", q:"Quante corde ha una chitarra classica?", a:["6","4","12","7"], correct:0, why:"La chitarra classica ha 6 corde." },
+  { cat:"Trivia", q:"Qual è il metallo liquido a temperatura ambiente?", a:["Mercurio","Piombo","Alluminio","Stagno"], correct:0, why:"Il mercurio è liquido a temperatura ambiente." },
+  { cat:"Trivia", q:"Quanti cuori ha un polpo?", a:["3","1","2","4"], correct:0, why:"Il polpo ha 3 cuori." },
+  { cat:"Trivia", q:"Qual è il pianeta più vicino al Sole?", a:["Mercurio","Venere","Marte","Terra"], correct:0, why:"Mercurio è il più vicino." },
+  { cat:"Trivia", q:"In che anno è uscito il primo iPhone?", a:["2007","2005","2010","2008"], correct:0, why:"Il primo iPhone è del 2007." },
+  { cat:"Trivia", q:"Qual è l'elemento chimico con simbolo 'O'?", a:["Ossigeno","Oro","Osmio","Olmio"], correct:0, why:"O è l'ossigeno; l'oro è Au." },
+  { cat:"Trivia", q:"Quante zampe ha un ragno?", a:["8","6","10","4"], correct:0, why:"I ragni hanno 8 zampe." },
+  { cat:"Trivia", q:"Qual è il colore ottenuto mescolando blu e giallo?", a:["Verde","Viola","Arancione","Marrone"], correct:0, why:"Blu + giallo = verde." },
+  { cat:"Trivia", q:"Quante lettere ha l'alfabeto italiano?", a:["21","26","20","23"], correct:0, why:"L'alfabeto italiano ha 21 lettere." },
+  { cat:"Trivia", q:"Quale animale è il più veloce del mondo?", a:["Falco pellegrino","Ghepardo","Rondine","Pesce spada"], correct:0, why:"Il falco pellegrino supera i 300 km/h in picchiata." },
+  { cat:"Trivia", q:"Qual è il metallo più prezioso tra questi?", a:["Oro","Argento","Rame","Ferro"], correct:0, why:"L'oro è il più prezioso tra quelli elencati." },
+  { cat:"Trivia", q:"Quante dita ha una mano umana?", a:["5","4","6","3"], correct:0, why:"Una mano ha 5 dita." },
+  { cat:"Trivia", q:"Qual è l'animale terrestre più grande?", a:["Elefante africano","Rinoceronte","Giraffa","Ippopotamo"], correct:0, why:"L'elefante africano è il più grande." },
+  { cat:"Trivia", q:"Qual è il colore del sangue venoso?", a:["Rosso scuro","Blu","Verde","Giallo"], correct:0, why:"Il sangue venoso è rosso scuro." },
+  { cat:"Trivia", q:"Quanti secondi ci sono in un'ora?", a:["3600","60","600","1800"], correct:0, why:"60 × 60 = 3600." },
+  { cat:"Trivia", q:"Qual è il satellite naturale della Terra?", a:["Luna","Marte","Venere","Sole"], correct:0, why:"La Luna è l'unico satellite naturale." },
+  { cat:"Trivia", q:"Quante ossa ha il corpo umano adulto?", a:["206","300","150","250"], correct:0, why:"Un adulto ha 206 ossa." },
+  { cat:"Trivia", q:"Qual è l'uccello che non vola?", a:["Pinguino","Aquila","Gabbiano","Colibrì"], correct:0, why:"Il pinguino non vola." },
+  { cat:"Trivia", q:"Qual è la sostanza più dura in natura?", a:["Diamante","Acciaio","Quarzo","Granito"], correct:0, why:"Il diamante è il minerale più duro." },
+  { cat:"Trivia", q:"Quante ruote ha un triciclo?", a:["3","2","4","1"], correct:0, why:"Il triciclo ha 3 ruote." },
+  { cat:"Trivia", q:"Qual è il pianeta più grande del sistema solare?", a:["Giove","Saturno","Nettuno","Urano"], correct:0, why:"Giove è il più grande." },
+  { cat:"Trivia", q:"Quanti colori ha l'arcobaleno?", a:["7","5","6","8"], correct:0, why:"Tradizionalmente 7 colori." },
+  { cat:"Trivia", q:"Qual è il mammifero più grande del mondo?", a:["Balenottera azzurra","Elefante","Capodoglio","Orca"], correct:0, why:"La balenottera azzurra è il più grande animale mai esistito." },
+  { cat:"Trivia", q:"Qual è il simbolo chimico dell'acqua?", a:["H2O","CO2","O2","NaCl"], correct:0, why:"L'acqua è H2O." },
+  { cat:"Trivia", q:"Quante sono le note musicali?", a:["7","5","8","12"], correct:0, why:"Le note naturali sono 7." },
+  { cat:"Trivia", q:"Qual è l'animale simbolo dell'Australia?", a:["Canguro","Leone","Orso","Tigre"], correct:0, why:"Il canguro è simbolo dell'Australia." },
+  { cat:"Trivia", q:"Quanti lati ha un esagono?", a:["6","5","7","8"], correct:0, why:"L'esagono ha 6 lati." },
+  { cat:"Trivia", q:"Qual è il pesce più grande del mondo?", a:["Squalo balena","Squalo bianco","Tonno","Pesce spada"], correct:0, why:"Lo squalo balena è il pesce più grande." },
+  { cat:"Trivia", q:"Quale organo pompa il sangue?", a:["Cuore","Fegato","Polmone","Rene"], correct:0, why:"Il cuore pompa il sangue." },
+  { cat:"Trivia", q:"Quante stagioni ci sono?", a:["4","3","5","2"], correct:0, why:"Le stagioni sono quattro." },
+  { cat:"Trivia", q:"Qual è il metallo usato per i fili elettrici?", a:["Rame","Oro","Piombo","Ferro"], correct:0, why:"Il rame è ottimo conduttore ed economico." },
+  { cat:"Trivia", q:"Qual è il mammifero che depone le uova?", a:["Ornitorinco","Pinguino","Koala","Pipistrello"], correct:0, why:"L'ornitorinco è un mammifero monotremo." },
+  { cat:"Trivia", q:"Quante carte ci sono in un mazzo francese?", a:["52","48","54","40"], correct:0, why:"Un mazzo francese ha 52 carte." },
+  { cat:"Trivia", q:"Qual è la stella più vicina alla Terra?", a:["Sole","Sirio","Proxima Centauri","Alpha Centauri"], correct:0, why:"Il Sole è la stella più vicina." },
+  { cat:"Trivia", q:"Quanti grammi ci sono in un chilogrammo?", a:["1000","100","10","10000"], correct:0, why:"1 kg = 1000 g." },
+  { cat:"Trivia", q:"Qual è l'organo più grande del corpo umano?", a:["Pelle","Fegato","Polmone","Intestino"], correct:0, why:"La pelle è l'organo più esteso." },
+  { cat:"Trivia", q:"Qual è il simbolo chimico del ferro?", a:["Fe","Fr","F","Ir"], correct:0, why:"Fe viene dal latino ferrum." },
+  { cat:"Trivia", q:"Qual è il colore della clorofilla?", a:["Verde","Rosso","Blu","Giallo"], correct:0, why:"La clorofilla è verde." },
+  { cat:"Trivia", q:"Quante ali ha una farfalla?", a:["4","2","6","8"], correct:0, why:"Le farfalle hanno 4 ali." },
+  { cat:"Trivia", q:"Qual è il vulcano più alto d'Europa?", a:["Etna","Vesuvio","Stromboli","Teide"], correct:0, why:"L'Etna è il vulcano attivo più alto d'Europa." },
+  { cat:"Trivia", q:"Quanto impiega la luce del Sole a raggiungere la Terra?", a:["8 minuti","1 anno","10 anni","1 giorno"], correct:0, why:"La luce del Sole impiega circa 8 minuti." },
+  { cat:"Trivia", q:"Qual è il numero atomico dell'idrogeno?", a:["1","2","3","4"], correct:0, why:"L'idrogeno ha numero atomico 1." },
+  { cat:"Trivia", q:"Quante sono le vocali nell'alfabeto italiano?", a:["5","4","6","7"], correct:0, why:"Le vocali sono 5." },
+  { cat:"Trivia", q:"Qual è il colore del sangue arterioso?", a:["Rosso vivo","Blu","Verde","Giallo"], correct:0, why:"Il sangue arterioso è rosso vivo." },
+  { cat:"Trivia", q:"Qual è il pianeta con gli anelli più visibili?", a:["Saturno","Giove","Urano","Nettuno"], correct:0, why:"Saturno è famoso per i suoi anelli." },
+  { cat:"Trivia", q:"Quante sono le ossa del cranio umano?", a:["22","28","15","30"], correct:0, why:"Il cranio umano ha 22 ossa." },
+  { cat:"Trivia", q:"Qual è l'unità di misura della forza?", a:["Newton","Joule","Watt","Pascal"], correct:0, why:"La forza si misura in Newton." },
+  { cat:"Trivia", q:"Qual è il simbolo chimico dell'oro?", a:["Au","Ag","Fe","Cu"], correct:0, why:"Au viene dal latino aurum." },
+  { cat:"Trivia", q:"Quanti cromosomi ha l'essere umano?", a:["46","44","48","23"], correct:0, why:"L'essere umano ha 46 cromosomi." },
+  { cat:"Trivia", q:"Qual è il fuso orario di riferimento mondiale?", a:["GMT","CET","EST","PST"], correct:0, why:"Il GMT è il riferimento mondiale." },
+  { cat:"Trivia", q:"Qual è l'animale più longevo del mondo?", a:["Tartaruga gigante","Elefante","Balena","Pappagallo"], correct:0, why:"Alcune tartarughe superano i 150 anni." },
+  { cat:"Trivia", q:"Quante corde ha un violino?", a:["4","6","5","3"], correct:0, why:"Il violino ha 4 corde." },
+  { cat:"Trivia", q:"Qual è l'unità di misura della temperatura nel SI?", a:["Kelvin","Celsius","Fahrenheit","Rankine"], correct:0, why:"Il Kelvin è l'unità SI." },
+  { cat:"Trivia", q:"Qual è la velocità della luce nel vuoto?", a:["300.000 km/s","150.000 km/s","1.000 km/s","30.000 km/s"], correct:0, why:"La luce viaggia a circa 300.000 km/s." },
+  { cat:"Trivia", q:"Qual è il metallo più leggero?", a:["Litio","Alluminio","Magnesio","Titanio"], correct:0, why:"Il litio è il metallo più leggero." },
+  { cat:"Trivia", q:"Quanti sono i pianeti del sistema solare?", a:["8","9","7","10"], correct:0, why:"Dal 2006 i pianeti sono 8." },
+  { cat:"Trivia", q:"Qual è il simbolo chimico del sodio?", a:["Na","So","S","N"], correct:0, why:"Na viene dal latino natrium." },
+  { cat:"Trivia", q:"Quante camere ha il cuore umano?", a:["4","2","3","5"], correct:0, why:"Il cuore ha 4 camere." },
+  { cat:"Trivia", q:"Qual è l'unità di misura dell'intensità di corrente?", a:["Ampere","Volt","Ohm","Watt"], correct:0, why:"Si misura in Ampere." },
+  { cat:"Trivia", q:"Quanti sono i sensi umani tradizionali?", a:["5","4","6","7"], correct:0, why:"I sensi tradizionali sono 5." },
+  { cat:"Trivia", q:"Qual è il simbolo chimico del carbonio?", a:["C","Ca","Co","Cr"], correct:0, why:"Il carbonio è C." },
+  { cat:"Trivia", q:"Quanti lati ha un triangolo?", a:["3","4","5","2"], correct:0, why:"Un triangolo ha 3 lati." },
+
+  // VITA QUOTIDIANA (60)
+  { cat:"Vita quotidiana", q:"Qual è la temperatura ideale del frigorifero?", a:["4°C","10°C","0°C","-2°C"], correct:0, why:"Intorno ai 4°C per sicurezza alimentare." },
+  { cat:"Vita quotidiana", q:"Cosa significa l'acronimo PEC?", a:["Posta Elettronica Certificata","Posta Elettronica Comune","Protocollo Elettronico Certificato","Piattaforma Elettronica Civica"], correct:0, why:"PEC sta per Posta Elettronica Certificata." },
+  { cat:"Vita quotidiana", q:"Quale rifiuto va nell'organico?", a:["Avanzi di cibo","Vetro","Plastica","Pile"], correct:0, why:"Gli avanzi di cibo vanno nell'organico." },
+  { cat:"Vita quotidiana", q:"Quanti litri d'acqua dovrebbe bere un adulto al giorno?", a:["Circa 2 litri","Circa 5 litri","Circa mezzo litro","Circa 8 litri"], correct:0, why:"Circa 1,5-2 litri al giorno." },
+  { cat:"Vita quotidiana", q:"Cosa indica il numero 112 in Europa?", a:["Numero unico di emergenza","Informazioni","Pronto soccorso veterinario","Numero del comune"], correct:0, why:"112 è il numero unico europeo per le emergenze." },
+  { cat:"Vita quotidiana", q:"Come conservare il pane per non farlo ammuffire subito?", a:["In un sacchetto di carta a temperatura ambiente","In frigo aperto","Sul balcone al sole","In acqua"], correct:0, why:"Il sacchetto di carta permette di respirare." },
+  { cat:"Vita quotidiana", q:"Quando va cambiato l'olio della macchina?", a:["Secondo il libretto di manutenzione","Ogni 10 anni","Mai","Solo quando si accende la spia"], correct:0, why:"Va seguito il piano del costruttore." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'IBAN'?", a:["International Bank Account Number","Italian Bank Account Number","International Banking Access Number","Internal Bank Account Number"], correct:0, why:"IBAN sta per International Bank Account Number." },
+  { cat:"Vita quotidiana", q:"Cosa fare in caso di incendio in casa?", a:["Chiamare i vigili del fuoco e uscire","Aprire le finestre","Prendere oggetti di valore","Spegnere con acqua"], correct:0, why:"Prima si chiamano i soccorsi e ci si mette in sicurezza." },
+  { cat:"Vita quotidiana", q:"Ogni quanto va cambiato lo spazzolino?", a:["Ogni 3 mesi","Ogni anno","Ogni 6 mesi","Ogni mese"], correct:0, why:"Si consiglia ogni 3 mesi." },
+  { cat:"Vita quotidiana", q:"Cosa indica la sigla IVA?", a:["Imposta sul Valore Aggiunto","Imposta sul Valore Annuo","Indice di Valutazione Aziendale","Imposta Varie Attività"], correct:0, why:"IVA è l'Imposta sul Valore Aggiunto." },
+  { cat:"Vita quotidiana", q:"Qual è il numero di emergenza per l'ambulanza in Italia?", a:["118","112","115","113"], correct:0, why:"118 è l'emergenza sanitaria." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'ISEE'?", a:["Indicatore della Situazione Economica Equivalente","Indice di Sostegno Economico Europeo","Imposta sulla Situazione Economica","Indicatore Sociale Europeo"], correct:0, why:"Indica la situazione economica del nucleo familiare." },
+  { cat:"Vita quotidiana", q:"Quale alimento va conservato in frigo dopo l'apertura?", a:["Maionese","Pasta secca","Caffè","Sale"], correct:0, why:"La maionese aperta va in frigo." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'Wi-Fi'?", a:["Marchio di certificazione per reti wireless","Wireless Fidelity","Wireless Fiber","Wire Frame"], correct:0, why:"Wi-Fi è un marchio commerciale, non un acronimo." },
+  { cat:"Vita quotidiana", q:"Quando si paga l'IMU?", a:["Sugli immobili di proprietà","Sui redditi","Sui consumi","Sulle auto"], correct:0, why:"L'IMU è l'imposta sugli immobili." },
+  { cat:"Vita quotidiana", q:"Cosa indica la sigla SPID?", a:["Sistema Pubblico di Identità Digitale","Sistema Privato di Identità Digitale","Servizio Pubblico Informatico Digitale","Sistema Personale di Identità"], correct:0, why:"SPID è l'identità digitale italiana." },
+  { cat:"Vita quotidiana", q:"Qual è il simbolo del riciclo della plastica?", a:["Triangolo con numero","Cerchio verde","Quadrato blu","Stella gialla"], correct:0, why:"Il triangolo con il numero indica il tipo di plastica." },
+  { cat:"Vita quotidiana", q:"Cosa bisogna fare prima di usare un estintore?", a:["Controllare il tipo di incendio","Bagnarsi","Aprire le finestre","Chiamare un amico"], correct:0, why:"Serve l'estintore adatto al tipo di incendio." },
+  { cat:"Vita quotidiana", q:"Qual è la durata tipica della carta d'identità italiana?", a:["10 anni","5 anni","15 anni","20 anni"], correct:0, why:"La carta d'identità dura 10 anni." },
+  { cat:"Vita quotidiana", q:"Quale documento serve per guidare in Italia?", a:["Patente di guida","Carta d'identità","Passaporto","Tessera sanitaria"], correct:0, why:"Serve la patente valida." },
+  { cat:"Vita quotidiana", q:"Cosa indica la sigla CU?", a:["Certificazione Unica","Certificato Unico Digitale","Codice Unico Dipendente","Contributo Unico"], correct:0, why:"La Certificazione Unica riassume i redditi." },
+  { cat:"Vita quotidiana", q:"Quanto dura la garanzia legale su un prodotto nuovo in Italia?", a:["2 anni","1 anno","6 mesi","5 anni"], correct:0, why:"La garanzia legale è di 2 anni." },
+  { cat:"Vita quotidiana", q:"Cosa fare in caso di perdita di gas in casa?", a:["Aprire le finestre e non accendere interruttori","Accendere la luce","Chiamare un amico","Usare il telefono in casa"], correct:0, why:"Bisogna areare e non creare scintille." },
+  { cat:"Vita quotidiana", q:"Qual è la velocità massima in autostrada in Italia?", a:["130 km/h","150 km/h","120 km/h","110 km/h"], correct:0, why:"Il limite è 130 km/h." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'RSPP'?", a:["Responsabile del Servizio di Prevenzione e Protezione","Responsabile Sicurezza Personale Pubblico","Registro Sicurezza Prevenzione Professionale","Responsabile Soccorso Pronto"], correct:0, why:"Figura della normativa sulla sicurezza sul lavoro." },
+  { cat:"Vita quotidiana", q:"Qual è il numero dei vigili del fuoco in Italia?", a:["115","112","118","113"], correct:0, why:"115 è il numero dei vigili del fuoco." },
+  { cat:"Vita quotidiana", q:"Cosa indica il codice fiscale?", a:["Un codice alfanumerico personale","Il numero di telefono","Il codice postale","Il numero di carta"], correct:0, why:"Identifica univocamente la persona." },
+  { cat:"Vita quotidiana", q:"Quando va fatta la revisione dell'auto?", a:["Dopo 4 anni e poi ogni 2","Dopo 2 anni e poi ogni anno","Dopo 10 anni","Mai"], correct:0, why:"La prima revisione è dopo 4 anni, poi biennale." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'PIN'?", a:["Personal Identification Number","Public Identification Number","Private Internet Number","Personal Internet Number"], correct:0, why:"PIN sta per Personal Identification Number." },
+  { cat:"Vita quotidiana", q:"Quale rifiuto va nella raccolta del vetro?", a:["Bottiglie di vetro","Tappi di sughero","Piatti di ceramica","Lampadine"], correct:0, why:"Solo il vetro da imballaggio va nel vetro." },
+  { cat:"Vita quotidiana", q:"Quante ore di sonno sono consigliate per un adulto?", a:["7-9","4-5","10-12","5-6"], correct:0, why:"Si consigliano 7-9 ore." },
+  { cat:"Vita quotidiana", q:"Cosa fare se si trova un oggetto smarrito in strada?", a:["Consegnarlo alla polizia o al comune","Tenerlo","Venderlo","Ignorarlo"], correct:0, why:"Va consegnato alle autorità." },
+  { cat:"Vita quotidiana", q:"Qual è il numero unico di emergenza europeo?", a:["112","911","999","000"], correct:0, why:"112 è il numero unico europeo." },
+  { cat:"Vita quotidiana", q:"Cosa indica la sigla TARI?", a:["Tassa sui Rifiuti","Tassa Auto Rimessa","Tariffa Riscaldamento","Tassa Regionale"], correct:0, why:"TARI è la tassa sui rifiuti." },
+  { cat:"Vita quotidiana", q:"Qual è la dose giornaliera consigliata di sale?", a:["Meno di 5 g","10 g","15 g","20 g"], correct:0, why:"L'OMS raccomanda meno di 5 g." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'ETA' nel contesto dei pagamenti?", a:["Estimated Time of Arrival","Electronic Transfer Account","European Transaction Authority","Extra Tax Amount"], correct:0, why:"Indica il tempo stimato di arrivo." },
+  { cat:"Vita quotidiana", q:"Cosa fare se scade la carta d'identità?", a:["Rinnovarla prima di viaggiare","Usarla comunque","Usare la patente","Nulla"], correct:0, why:"Va rinnovata per viaggiare e per molti servizi." },
+  { cat:"Vita quotidiana", q:"Come lavarsi le mani correttamente?", a:["Con acqua e sapone per almeno 20 secondi","Solo acqua","Solo gel","Con acqua fredda 5 secondi"], correct:0, why:"Acqua e sapone per almeno 20 secondi." },
+  { cat:"Vita quotidiana", q:"Cosa indica il termine 'spread'?", a:["Differenza di rendimento tra titoli","Un tipo di tassa","Un conto bancario","Un tipo di mutuo"], correct:0, why:"È la differenza di rendimento tra titoli." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'bonifico'?", a:["Trasferimento di denaro tra conti","Un tipo di carta","Un prestito","Un investimento"], correct:0, why:"Il bonifico è un trasferimento di denaro." },
+  { cat:"Vita quotidiana", q:"Cosa indica il termine 'mutuo'?", a:["Prestito a lungo termine per acquisto casa","Un conto corrente","Un tipo di assicurazione","Una carta di credito"], correct:0, why:"Il mutuo è un prestito finalizzato all'immobile." },
+  { cat:"Vita quotidiana", q:"Qual è la prima regola della sicurezza informatica?", a:["Usare password diverse e complesse","Usare la stessa password","Non usare password","Scrivere le password su un foglio"], correct:0, why:"Password diverse e complesse sono fondamentali." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'phishing'?", a:["Truffa via email per rubare dati","Un tipo di pesce","Un gioco online","Un programma antivirus"], correct:0, why:"Il phishing è una truffa online." },
+  { cat:"Vita quotidiana", q:"Cosa indica la sigla ONLUS?", a:["Organizzazione Non Lucrativa di Utilità Sociale","Organizzazione Nazionale Lavoratori Uniti","Ordine Nazionale Liberi Professionisti","Organizzazione Nuova Lavoro Umano"], correct:0, why:"ONLUS indica un ente senza scopo di lucro." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'dieta mediterranea'?", a:["Ricca di frutta, verdura e olio d'oliva","Solo carne","Solo pesce","Solo carboidrati"], correct:0, why:"La dieta mediterranea è equilibrata e ricca di vegetali." },
+  { cat:"Vita quotidiana", q:"Qual è la temperatura corporea normale di un adulto?", a:["36,5°C","38°C","35°C","40°C"], correct:0, why:"La temperatura normale è intorno ai 36,5°C." },
+  { cat:"Vita quotidiana", q:"Cosa indica la sigla INAIL?", a:["Istituto Nazionale Assicurazione Infortuni sul Lavoro","Istituto Nazionale Assistenza Invalidi Lavoratori","Istituto Nazionale Aiuti Invalidi Lavoro","Istituto Nazionale Assicurazione Invalidi Lavoro"], correct:0, why:"INAIL gestisce l'assicurazione contro gli infortuni." },
+  { cat:"Vita quotidiana", q:"Cosa fare prima di firmare un contratto?", a:["Leggerlo attentamente","Firmarlo subito","Chiedere a un amico","Ignorarlo"], correct:0, why:"Bisogna sempre leggere prima di firmare." },
+  { cat:"Vita quotidiana", q:"Cosa indica il termine 'bolletta'?", a:["Documento di pagamento per utenze","Un tipo di carta","Un contratto","Una ricevuta fiscale"], correct:0, why:"La bolletta è il documento di pagamento per utenze." },
+  { cat:"Vita quotidiana", q:"Qual è il numero per le emergenze ambientali in Italia?", a:["1515","112","118","115"], correct:0, why:"1515 è il numero per le emergenze ambientali." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'ricetta medica'?", a:["Documento per acquistare farmaci","Un tipo di cibo","Un esame del sangue","Un certificato"], correct:0, why:"La ricetta medica è necessaria per alcuni farmaci." },
+  { cat:"Vita quotidiana", q:"Cosa indica il termine 'tasso di interesse'?", a:["Costo del denaro prestato","Un tipo di tassa","Un investimento","Un conto"], correct:0, why:"È il costo del denaro." },
+  { cat:"Vita quotidiana", q:"Cosa fare se si riceve un'email sospetta?", a:["Non aprirla e segnalarla","Aprirla subito","Rispondere","Cliccare i link"], correct:0, why:"Le email sospette vanno segnalate e non aperte." },
+  { cat:"Vita quotidiana", q:"Qual è il modo corretto di smaltire le pile?", a:["Nel contenitore dedicato","Nell'indifferenziata","Nell'organico","Nel vetro"], correct:0, why:"Le pile vanno smaltite in contenitori dedicati." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'preventivo'?", a:["Stima di costo di un lavoro","Un tipo di contratto","Un pagamento","Un conto"], correct:0, why:"Il preventivo è una stima di costo." },
+  { cat:"Vita quotidiana", q:"Cosa indica la sigla ASL?", a:["Azienda Sanitaria Locale","Associazione Sanitaria Libera","Azienda Sociale Lavoro","Assistenza Sanitaria Libera"], correct:0, why:"ASL sta per Azienda Sanitaria Locale." },
+  { cat:"Vita quotidiana", q:"Come conservare i farmaci?", a:["In luogo fresco e asciutto","In frigo sempre","Al sole","In bagno"], correct:0, why:"I farmaci vanno conservati in luogo fresco e asciutto." },
+  { cat:"Vita quotidiana", q:"Cosa significa 'fido' in banca?", a:["Affidamento di credito","Un tipo di carta","Un conto","Un investimento"], correct:0, why:"Il fido è un affidamento di credito." },
+  { cat:"Vita quotidiana", q:"Cosa indica la sigla RCA?", a:["Responsabilità Civile Auto","Registro Centrale Auto","Rimborso Costi Auto","Rete Contributi Auto"], correct:0, why:"RCA è l'assicurazione di Responsabilità Civile Auto." }
+];
+
+// SHOP: Solo decorazioni per lo sfondo e temi di colore
+const SHOP_ITEMS = [
+  { id:"theme-dark",   type:"theme", name:"Tema Scuro (Default)", emoji:"🌑", price:0,   desc:"Lo stile base del gioco" },
+  { id:"theme-blue",   type:"theme", name:"Tema Blu",            emoji:"🌊", price:150, desc:"Colori freschi e rilassanti" },
+  { id:"theme-green",  type:"theme", name:"Tema Verde",          emoji:"🌲", price:150, desc:"Un tocco di natura" },
+  { id:"theme-purple", type:"theme", name:"Tema Viola",          emoji:"🌌", price:200, desc:"Misterioso ed elegante" },
+  { id:"theme-light",  type:"theme", name:"Tema Chiaro",         emoji:"☀️", price:250, desc:"Per giocare di giorno" },
+  { id:"deco-stars",   type:"deco",  name:"Sfondo Stellato",     emoji:"✨", price:100, desc:"Stelle nell'angolo" },
+  { id:"deco-hearts",  type:"deco",  name:"Cuori",               emoji:"💖", price:120, desc:"Cuori decorativi" },
+  { id:"deco-paws",    type:"deco",  name:"Zampe",               emoji:"🐾", price:80,  desc:"Impronte ovunque" },
+];
+
+const STORAGE_KEY = "quizAppState_v7";
+const LESSONS_PER_DAY = 3;
+const QUESTIONS_PER_LESSON = 5;
+const COINS_PER_CORRECT = 10;
+const COINS_LESSON_BONUS = 25;
+
+function defaultState() {
+  return {
+    streak:0, lastPlayed:null,
+    totalCorrect:0, totalAnswers:0,
+    lessonsToday:0, lessonsDay:null,
+    seenQuestions:[],
+    coins:0,
+    ownedItems:[],
+    equipped:{ theme:"theme-dark", deco:null } // Default theme
+  };
+}
+function loadState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return defaultState();
+  try {
+    const s = Object.assign(defaultState(), JSON.parse(raw));
+    if (!s.equipped) s.equipped = defaultState().equipped;
+    if (!Array.isArray(s.ownedItems)) s.ownedItems = [];
+    return s;
+  } catch { return defaultState(); }
+}
+function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+let state = loadState();
+let deck = [];
+let idx = 0;
+let correctThisSession = 0;
+let answered = false;
+
+const view = document.getElementById("view");
+const streakEl = document.getElementById("streak");
+const statsEl = document.getElementById("stats");
+const counterEl = document.getElementById("counter");
+const coinsEl = document.getElementById("coins");
+const barEl = document.getElementById("bar");
+const catStage = document.getElementById("catStage");
+const catBubble = document.getElementById("catBubble");
+let bubbleTimeout = null;
+
+const FRASI_GIUSTO = ["Miao! Perfetto 🐾", "Bravo! 🎉", "Miao miao! 😻", "Ottimo lavoro!", "Ci sei! 🐱", "Sììì! 🎊"];
+const FRASI_SBAGLIATO = ["Miao… quasi 😿", "Riprovaci! 🐾", "Oops, sbagliato!", "Mrrp… 😾", "Non ci siamo 😿", "La prossima va meglio!"];
+const FRASI_FINE = ["Miao! Lezione finita! 🎉", "Bravissimo! 🐱🎊", "Ce l'hai fatta! 😻", "Miao miao miao! 🎉"];
+
+function setCatMood(mood) {
+  catStage.classList.remove("cat-idle", "cat-happy", "cat-sad", "cat-celebrate");
+  catStage.classList.add("cat-" + mood);
+}
+function showBubble(text, duration = 2000) {
+  catBubble.textContent = text;
+  catBubble.classList.add("show");
+  clearTimeout(bubbleTimeout);
+  bubbleTimeout = setTimeout(() => catBubble.classList.remove("show"), duration);
+}
+function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function catWander() {
+  const dx = (Math.random() - 0.5) * 60;
+  const dy = (Math.random() - 0.5) * 40;
+  catStage.style.transform = `translate(${dx}px, ${dy}px)`;
+}
+
+function applyCosmetics() {
+  const e = state.equipped;
+  const root = document.documentElement;
+
+  // 1. Applica Tema
+  if (e.theme === "theme-dark" || !e.theme) {
+    root.style.setProperty('--bg', '#131f24');
+    root.style.setProperty('--card', '#1f2f38');
+    root.style.setProperty('--border', '#2b3d47');
+    root.style.setProperty('--text', '#f1f7fb');
+  } else if (e.theme === "theme-blue") {
+    root.style.setProperty('--bg', '#0f172a');
+    root.style.setProperty('--card', '#1e293b');
+    root.style.setProperty('--border', '#334155');
+    root.style.setProperty('--text', '#f8fafc');
+  } else if (e.theme === "theme-green") {
+    root.style.setProperty('--bg', '#142b1e');
+    root.style.setProperty('--card', '#1e3a2a');
+    root.style.setProperty('--border', '#2e503d');
+    root.style.setProperty('--text', '#f0fdf4');
+  } else if (e.theme === "theme-purple") {
+    root.style.setProperty('--bg', '#1f1333');
+    root.style.setProperty('--card', '#2e1d4a');
+    root.style.setProperty('--border', '#432e66');
+    root.style.setProperty('--text', '#faf5ff');
+  } else if (e.theme === "theme-light") {
+    root.style.setProperty('--bg', '#f1f5f9');
+    root.style.setProperty('--card', '#ffffff');
+    root.style.setProperty('--border', '#cbd5e1');
+    root.style.setProperty('--text', '#0f172a');
+  }
+
+  // 2. Applica Decorazioni Sfondo
+  document.querySelectorAll(".deco").forEach(d => { d.style.display = "none"; d.textContent = ""; });
+  const decoMap = {
+    "deco-stars": ["✨","⭐","✨"],
+    "deco-hearts": ["💖","💗","💕"],
+    "deco-paws": ["🐾","🐾","🐾"]
+  };
+  if (e.deco && decoMap[e.deco]) {
+    const [tl, tr, bl] = decoMap[e.deco];
+    document.getElementById("decoTL").textContent = tl;
+    document.getElementById("decoTR").textContent = tr;
+    document.getElementById("decoBL").textContent = bl;
+    ["decoTL","decoTR","decoBL"].forEach(id => document.getElementById(id).style.display = "block");
+  }
+}
+
+function renderHeader() {
+  streakEl.textContent = `🔥 ${state.streak} ${state.streak === 1 ? "giorno" : "giorni"}`;
+  statsEl.textContent = `${state.totalCorrect} risposte corrette`;
+  coinsEl.textContent = `🪙 ${state.coins}`;
+}
+function renderProgress() {
+  const pct = deck.length ? (idx / deck.length) * 100 : 0;
+  barEl.style.width = pct + "%";
+  counterEl.textContent = deck.length ? `${idx} / ${deck.length}` : "";
+}
+
+function today() { return new Date().toISOString().slice(0,10); }
+function refreshDailyLimit() {
+  const t = today();
+  if (state.lessonsDay !== t) { state.lessonsDay = t; state.lessonsToday = 0; saveState(); }
+}
+function lessonsRemaining() { refreshDailyLimit(); return Math.max(0, LESSONS_PER_DAY - state.lessonsToday); }
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function updateStreakOnStart() {
+  const t = today();
+  if (state.lastPlayed === t) return;
+  if (state.lastPlayed) {
+    const last = new Date(state.lastPlayed);
+    const now = new Date(t);
+    const diff = Math.round((now - last) / (1000*60*60*24));
+    if (diff === 1) state.streak += 1;
+    else if (diff > 1) state.streak = 1;
+  } else state.streak = 1;
+  state.lastPlayed = t;
+  saveState();
+  streakEl.classList.add("bump");
+  setTimeout(() => streakEl.classList.remove("bump"), 400);
+}
+
+function buildLesson() {
+  const seenSet = new Set(state.seenQuestions);
+  const unseen = [], seen = [];
+  QUESTIONS.forEach((q, i) => { (seenSet.has(i) ? seen : unseen).push(i); });
+  const pool = shuffle(unseen).concat(shuffle(seen));
+  const chosen = pool.slice(0, Math.min(QUESTIONS_PER_LESSON, pool.length));
+  chosen.forEach(i => { if (!state.seenQuestions.includes(i)) state.seenQuestions.push(i); });
+  saveState();
+  if (state.seenQuestions.length >= QUESTIONS.length) { state.seenQuestions = []; saveState(); }
+  deck = chosen.map(i => {
+    const q = QUESTIONS[i];
+    const correctText = q.a[q.correct];
+    const shuffled = shuffle([...q.a]);
+    return { cat:q.cat, q:q.q, a:shuffled, correct:shuffled.indexOf(correctText), why:q.why };
+  });
+}
+
+function renderMenu() {
+  refreshDailyLimit();
+  renderHeader();
+  applyCosmetics();
+  barEl.style.width = "0%";
+  counterEl.textContent = "";
+  setCatMood("idle");
+  showBubble("Ciao! Pronto per giocare? 🐱", 2500);
+
+  const remaining = lessonsRemaining();
+  const canPlay = remaining > 0;
+  const counts = {};
+  QUESTIONS.forEach(q => { counts[q.cat] = (counts[q.cat] || 0) + 1; });
+  const catRows = Object.entries(counts)
+    .map(([c,n]) => `<div class="cat-row"><span>${c}</span><span>${n}</span></div>`)
+    .join("");
+
+  view.innerHTML = `
+    <div class="menu-title">Ciao! 👋</div>
+    <div class="menu-sub">Pronto per la tua lezione quotidiana?</div>
+    <div class="card">
+      <div class="lesson-info">
+        <span>Lezioni oggi: <b>${state.lessonsToday} / ${LESSONS_PER_DAY}</b></span>
+        <span>${remaining > 0 ? `${remaining} rimaste` : "Limite raggiunto"}</span>
+      </div>
+      ${canPlay
+        ? `<button class="btn" id="startBtn">Inizia lezione</button>`
+        : `<div class="limit-box"><h3>Hai finito per oggi 🌙</h3><p>Torna domani per altre ${LESSONS_PER_DAY} lezioni. Lo streak ti aspetta!</p></div>`
+      }
+    </div>
+    <button class="btn gold" id="shopBtn">🛍️ Apri lo Shop (🪙 ${state.coins})</button>
+    <div class="card">
+      <div class="category">Categorie disponibili</div>
+      ${catRows}
+    </div>
+    <button class="btn secondary" id="resetBtn">Azzera progressi</button>
+  `;
+
+  if (canPlay) document.getElementById("startBtn").addEventListener("click", startLesson);
+  document.getElementById("shopBtn").addEventListener("click", renderShop);
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    if (confirm("Vuoi davvero azzerare TUTTI i progressi, monete e acquisti?")) {
+      localStorage.removeItem(STORAGE_KEY);
+      state = defaultState();
+      saveState();
+      renderMenu();
+    }
+  });
+}
+
+function renderShop() {
+  renderHeader();
+  barEl.style.width = "0%";
+  counterEl.textContent = "";
+  setCatMood("idle");
+  showBubble("Benvenuto nello shop! 🛍️", 2000);
+
+  const groups = [
+    { title:"🎨 Temi Colore",  type:"theme" },
+    { title:"✨ Decorazioni",  type:"deco" },
+  ];
+
+  const sectionsHtml = groups.map(g => {
+    const items = SHOP_ITEMS.filter(i => i.type === g.type);
+    if (!items.length) return "";
+    const rows = items.map(item => {
+      const owned = state.ownedItems.includes(item.id) || item.price === 0;
+      const equipped = state.equipped[item.type] === item.id;
+      let btnClass = "shop-buy";
+      let btnLabel = `${item.price} 🪙`;
+      let disabled = false;
+      
+      if (equipped) { btnClass += " equipped"; btnLabel = "✓ Attivo"; disabled = true; }
+      else if (owned) { btnClass += " owned"; btnLabel = "Attiva"; }
+      else if (state.coins < item.price) { disabled = true; }
+      
+      return `
+        <div class="shop-item">
+          <div class="shop-item-info">
+            <div class="shop-item-emoji">${item.emoji}</div>
+            <div>
+              <div class="shop-item-name">${item.name}</div>
+              <div class="shop-item-desc">${item.desc}</div>
+            </div>
+          </div>
+          <button class="${btnClass}" data-id="${item.id}" ${disabled ? "disabled" : ""}>${btnLabel}</button>
+        </div>
+      `;
+    }).join("");
+    return `<div class="shop-section-title">${g.title}</div>${rows}`;
+  }).join("");
+
+  view.innerHTML = `
+    <div class="menu-title">🛍️ Shop</div>
+    <div class="menu-sub">Monete disponibili: <b style="color:var(--gold)">🪙 ${state.coins}</b></div>
+    <div class="card">${sectionsHtml}</div>
+    <button class="btn secondary" id="backBtn">← Torna al menu</button>
+  `;
+
+  document.querySelectorAll(".shop-buy").forEach(btn => {
+    btn.addEventListener("click", () => buyOrEquip(btn.dataset.id));
+  });
+  document.getElementById("backBtn").addEventListener("click", renderMenu);
+}
+
+function buyOrEquip(id) {
+  const item = SHOP_ITEMS.find(i => i.id === id);
+  if (!item) return;
+  
+  const owned = state.ownedItems.includes(id) || item.price === 0;
+  const equipped = state.equipped[item.type] === id;
+  
+  if (equipped) return;
+
+  // Se lo possiede, lo equipaggia
+  if (owned) {
+    state.equipped[item.type] = id;
+    saveState();
+    applyCosmetics();
+    showBubble(`Attivato: ${item.name}! ✨`, 1500);
+    setCatMood("happy");
+    setTimeout(() => setCatMood("idle"), 800);
+    renderShop();
+    return;
+  }
+
+  // Se non lo possiede, controlla monete
+  if (state.coins < item.price) {
+    showBubble("Non hai abbastanza monete! 😿", 1500);
+    setCatMood("sad");
+    setTimeout(() => setCatMood("idle"), 800);
+    return;
+  }
+
+  // Compra
+  state.coins -= item.price;
+  state.ownedItems.push(id);
+  state.equipped[item.type] = id;
+  saveState();
+  applyCosmetics();
+  renderHeader();
+  showBubble(`Comprato: ${item.name}! 🎉`, 1800);
+  setCatMood("happy");
+  setTimeout(() => setCatMood("idle"), 800);
+  renderShop();
+}
+
+function startLesson() {
+  if (lessonsRemaining() <= 0) return;
+  updateStreakOnStart();
+  buildLesson();
+  idx = 0;
+  correctThisSession = 0;
+  setCatMood("idle");
+  showBubble("Si comincia! 🐾", 1500);
+  renderQuestion();
+}
+
+function renderQuestion() {
+  if (idx >= deck.length) return renderLessonDone();
+  const q = deck[idx];
+  answered = false;
+  renderProgress();
+  view.innerHTML = `
+    <div class="card">
+      <div class="category">${q.cat}</div>
+      <div class="question">${q.q}</div>
+      <div class="answers">
+        ${q.a.map((ans,i) => `<button class="answer" data-i="${i}">${ans}</button>`).join("")}
+      </div>
+      <div class="feedback" id="feedback"></div>
+      <button class="btn hidden" id="nextBtn">Continua</button>
+    </div>
+  `;
+  document.querySelectorAll(".answer").forEach(btn => {
+    btn.addEventListener("click", () => handleAnswer(parseInt(btn.dataset.i), q));
+  });
+  document.getElementById("nextBtn").addEventListener("click", () => { idx++; renderQuestion(); });
+}
+
+function handleAnswer(selected, q) {
+  if (answered) return;
+  answered = true;
+  const isCorrect = selected === q.correct;
+  document.querySelectorAll(".answer").forEach((btn, i) => {
+    btn.disabled = true;
+    if (i === q.correct) btn.classList.add("correct");
+    else if (i === selected) btn.classList.add("wrong");
+  });
+  const fb = document.getElementById("feedback");
+  fb.className = "feedback show " + (isCorrect ? "ok" : "no");
+  fb.textContent = (isCorrect ? "✅ Giusto! " : "❌ Sbagliato. ") + q.why;
+
+  state.totalAnswers += 1;
+  if (isCorrect) {
+    state.totalCorrect += 1;
+    correctThisSession += 1;
+    state.coins += COINS_PER_CORRECT;
+    showCoinGain(COINS_PER_CORRECT);
+  }
+  saveState();
+  renderHeader();
+
+  if (isCorrect) {
+    setCatMood("happy");
+    showBubble(randomFrom(FRASI_GIUSTO) + ` +${COINS_PER_CORRECT}🪙`, 1800);
+    setTimeout(() => setCatMood("idle"), 800);
+    catWander();
+  } else {
+    setCatMood("sad");
+    showBubble(randomFrom(FRASI_SBAGLIATO), 1800);
+    setTimeout(() => setCatMood("idle"), 800);
+  }
+
+  const nextBtn = document.getElementById("nextBtn");
+  nextBtn.classList.remove("hidden");
+  nextBtn.textContent = idx === deck.length - 1 ? "Termina lezione" : "Continua";
+}
+
+function showCoinGain(amount) {
+  const el = document.createElement("div");
+  el.textContent = `+${amount} 🪙`;
+  el.style.cssText = `
+    position: fixed; right: 130px; bottom: 150px; z-index: 200;
+    color: var(--gold); font-weight: 800; font-size: 18px;
+    pointer-events: none; text-shadow: 0 2px 4px rgba(0,0,0,.5);
+    animation: coinFloat 1s ease forwards;
+  `;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+  if (!document.getElementById("coinAnimStyle")) {
+    const style = document.createElement("style");
+    style.id = "coinAnimStyle";
+    style.textContent = `@keyframes coinFloat {
+      0%   { opacity: 0; transform: translateY(0) scale(.8); }
+      20%  { opacity: 1; transform: translateY(-10px) scale(1.1); }
+      100% { opacity: 0; transform: translateY(-60px) scale(1); }
+    }`;
+    document.head.appendChild(style);
+  }
+}
+
+function renderLessonDone() {
+  refreshDailyLimit();
+  state.lessonsToday += 1;
+  state.coins += COINS_LESSON_BONUS;
+  saveState();
+  renderHeader();
+
+  barEl.style.width = "100%";
+  counterEl.textContent = `${deck.length} / ${deck.length}`;
+  setCatMood("celebrate");
+  showBubble(randomFrom(FRASI_FINE) + ` +${COINS_LESSON_BONUS}🪙 bonus!`, 3000);
+
+  const remaining = lessonsRemaining();
+  const earned = correctThisSession * COINS_PER_CORRECT + COINS_LESSON_BONUS;
+  view.innerHTML = `
+    <div class="card done">
+      <h2>Lezione completata! 🎉</h2>
+      <p>Hai risposto correttamente a ${correctThisSession} domande su ${deck.length}.</p>
+      <p style="font-size:16px;color:var(--gold);font-weight:700">+${earned} 🪙 guadagnate!</p>
+      <p style="font-size:13px">Lezioni rimaste oggi: ${remaining}</p>
+      <button class="btn" id="shopBtn2">🛍️ Vai allo Shop</button>
+      <button class="btn secondary" id="menuBtn">Torna al menu</button>
+    </div>
+  `;
+  document.getElementById("shopBtn2").addEventListener("click", renderShop);
+  document.getElementById("menuBtn").addEventListener("click", () => {
+    setCatMood("idle");
+    renderMenu();
+  });
+  launchConfetti();
+}
+
+function launchConfetti() {
+  const colors = ["#58cc02","#ff9600","#ff4b4b","#1cb0f6","#ce82ff","#ffd700"];
+  for (let i = 0; i < 40; i++) {
+    const c = document.createElement("div");
+    c.className = "confetti";
+    c.style.left = Math.random() * 100 + "vw";
+    c.style.background = colors[Math.floor(Math.random() * colors.length)];
+    c.style.animationDuration = (1.2 + Math.random() * 1.2) + "s";
+    c.style.animationDelay = (Math.random() * 0.3) + "s";
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 3000);
+  }
+}
+
+try {
+  refreshDailyLimit();
+  renderMenu();
+} catch (e) {
+  console.error("Errore avvio:", e);
+  document.getElementById("view").innerHTML =
+    '<div class="card"><h2 style="color:#ff4b4b">Errore di caricamento</h2><p>Apri la console (F12) per i dettagli.</p><p style="font-size:12px;color:#8fa6b2">' + e.message + '</p></div>';
+}
+</script>
+</body>
+</html>
